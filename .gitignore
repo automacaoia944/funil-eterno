@@ -1,0 +1,49 @@
+# Dependencies
+/node_modules
+/backend/venv/
+
+# Build Output & Cache
+/dist
+/dist-ssr
+/node_modules/.vite
+.eslintcache
+
+# IDE / Editor / System Folders
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+.idea/
+.cursor-cache/
+*.DS_Store
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Environment Variables (CRUCIAL!)
+.env
+.env.*
+!.env.example
+!.env.example.*
+# Python backend .env should be gitignored by backend/.gitignore
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.pyc
+__pycache__/
+
+# Firebase
+.firebase/
+firebase-debug.log*
+firebase-debug.*.log
+
+# Vector Store Local DBs (Example)
+*.db
+chroma_db/
