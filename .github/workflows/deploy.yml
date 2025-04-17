@@ -1,0 +1,79 @@
+name: Deploy Frontend and Trigger Backend on Push to Main
+
+on:
+  push:
+    branches:
+      - main # Dispara em push para o branch main
+  workflow_dispatch: # Permite disparo manual pela interface do GitHub Actions
+
+jobs:
+  # --- Job 1: Build Frontend (Verificação) ---
+  build_frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Use a mesma versão Node que você tem localmente ou LTS
+          cache: 'npm'
+
+      - name: Install Frontend dependencies
+        run: npm ci # 'ci' é geralmente mais rápido e determinístico em CI/CD
+
+      - name: Build Frontend project
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_PYTHON_API_URL: ${{ secrets.PYTHON_API_URL }} # URL pública do backend
+
+  # --- Job 2: Deploy Frontend to Firebase Hosting ---
+  deploy_frontend:
+    name: Deploy Frontend to Firebase
+    runs-on: ubuntu-latest
+    needs: build_frontend # Só roda se o build passar
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Frontend dependencies
+        run: npm ci
+
+      - name: Build Frontend project for Production
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_PYTHON_API_URL: ${{ secrets.PYTHON_API_URL }}
+
+      - name: Deploy Frontend to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}' # Token padrão do GitHub Actions
+          # IMPORTANTE: Use o nome EXATO do secret que você criou no GitHub
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_FUNIL_ETERNO_CFE }}'
+          channelId: live # Deploy para produção
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }} # ID do projeto Firebase
+        env:
+          FIREBASE_CLI_EXPERIMENTS: webframeworks # Habilita detecção automática do Vite
+
+  # --- Job 3: Trigger Backend Deploy (Render Hook) ---
+  deploy_backend:
+    name: Trigger Backend Deploy (Render)
+    runs-on: ubuntu-latest
+    needs: build_frontend # Garante que o build passou
+    # Só roda se o secret do Deploy Hook estiver definido e não for uma string vazia
+    if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+    steps:
+      - name: Trigger Render Deploy Webhook
+        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }} 
