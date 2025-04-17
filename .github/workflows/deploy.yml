@@ -72,7 +72,10 @@ jobs:
     name: Trigger Backend Deploy (Render)
     runs-on: ubuntu-latest
     needs: build_frontend # Garante que o build passou
+    env: # Definindo a variável de ambiente no nível do job
+      RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
     steps:
       - name: Trigger Render Deploy Webhook
-        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
-        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }} 
+        # if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }} # Remove condição antiga do step
+        if: env.RENDER_HOOK != '' # Condição no step verificando a variável de ambiente
+        run: curl -X POST ${{ env.RENDER_HOOK }} # Usando a variável de ambiente também no run 
