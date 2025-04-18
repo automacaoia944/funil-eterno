@@ -3,17 +3,27 @@ from fastapi import APIRouter, HTTPException, Body, Depends, BackgroundTasks, st
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import uuid # Para gerar IDs de tarefa
-from datetime import datetime # Para timestamps
+from datetime import datetime, timezone
+import logging # Adicionado logging
 
-# Importar o serviço da CrewAI e a função de execução
+# Importar cliente Supabase Admin
+try:
+    from lib.supabase_client import supabase_admin_client
+    # Verifica se foi inicializado corretamente
+    if not supabase_admin_client:
+        logging.error("Supabase admin client FAILED to initialize in ai_tasks.py.")
+    else:
+        logging.info("Supabase admin client successfully imported in ai_tasks.py.")
+except ImportError:
+    supabase_admin_client = None
+    logging.error("Supabase admin client could NOT be imported in ai_tasks.py.")
+
+# Importar serviço CrewAI
 try:
     from services import crew_service
 except ImportError:
     crew_service = None
-    print("Warning: crew_service not found or could not be imported.")
-
-# TODO: Importar cliente Supabase para interagir com DB
-# from lib.supabase_client import supabase_client_admin # Exemplo
+    logging.warning("crew_service not found or could not be imported in ai_tasks.py.")
 
 router = APIRouter()
 
@@ -63,40 +73,66 @@ async def start_niche_analysis_endpoint(
     Recebe paixões/habilidades do usuário, inicia a Crew de análise de nicho
     em segundo plano e retorna um ID de tarefa para consulta.
     """
+    logging.info(f"Received request for /analyze-niche for project: {payload.project_id}")
     if not crew_service:
         raise HTTPException(status_code=501, detail="Serviço CrewAI não está disponível.")
-
-    # TODO: Validar se project_id pertence ao user_id autenticado
+    if not supabase_admin_client:
+        # Log extra antes de lançar a exceção
+        logging.error("Aborting /analyze-niche: Supabase admin client is not available.")
+        raise HTTPException(status_code=503, detail="Conexão com banco de dados não disponível.")
 
     task_id = uuid.uuid4()
     task_type = "ANALYZE_NICHE"
-    user_id_uuid = uuid.UUID(payload.user_id) # TODO: Pegar do token, não do payload
-    project_id_uuid = uuid.UUID(payload.project_id)
 
-    # 1. Criar registro da tarefa no Supabase (status PENDING)
+    # Tenta converter IDs (ainda recebendo string)
     try:
-        task_record = TaskRecordCreate(
-            id=task_id,
-            project_id=project_id_uuid,
-            user_id=user_id_uuid, # Usar ID do usuário autenticado
-            task_type=task_type
-        )
-        # TODO: Fazer insert real no Supabase
-        # _, error = await supabase_client_admin.table('async_tasks').insert(task_record.model_dump()).execute()
-        # if error:
-        #    raise HTTPException(status_code=500, detail=f"Erro ao registrar tarefa no DB: {error}")
-        print(f"Placeholder: Registrando tarefa {task_id} para projeto {payload.project_id}")
+        # TODO: Validar se estes IDs existem no DB e pertencem ao usuário autenticado
+        user_id_uuid = uuid.UUID(payload.user_id)
+        project_id_uuid = uuid.UUID(payload.project_id)
+    except ValueError:
+        logging.error(f"Invalid UUID format received: user_id='{payload.user_id}', project_id='{payload.project_id}'")
+        raise HTTPException(status_code=400, detail="Formato inválido para project_id ou user_id.")
+
+    # 1. Criar registro REAL da tarefa no Supabase
+    try:
+        task_data_to_insert = {
+            "id": str(task_id), # Envia como string, o DB converte para UUID se o tipo for UUID
+            "project_id": str(project_id_uuid),
+            "user_id": str(user_id_uuid),
+            "task_type": task_type,
+            "status": 'PENDING',
+            # created_at e updated_at usarão DEFAULT do DB
+        }
+        logging.info(f"Attempting to insert task {task_id} into Supabase...")
+        response = supabase_admin_client.table('async_tasks').insert(task_data_to_insert).execute()
+        logging.info(f"Supabase insert response for task {task_id}: {response}")
+
+        # Verificação de erro mais robusta (Supabase-py v1 vs v2 pode variar)
+        # Ajustei para como a biblioteca v1 geralmente se comporta (sem async/await direto aqui)
+        # E checando o erro na resposta explicitamente.
+        if hasattr(response, 'error') and response.error:
+             logging.error(f"Supabase insert error (API Error): {response.error.message}")
+             # Lança exceção para ser pega pelo bloco except externo
+             raise Exception(f"Supabase insert error: {response.error.message}")
+        # Verifica se 'data' existe e não está vazia (indicador de sucesso comum)
+        elif not response.data:
+             logging.warning(f"Supabase insert for task {task_id} returned no data. Assuming success, but verify.")
+             # Poderia lançar erro aqui se 'data' for estritamente necessário
+
+        logging.info(f"Task {task_id} registered in DB for project {payload.project_id}")
 
     except Exception as db_error:
-         raise HTTPException(status_code=500, detail=f"Erro interno ao registrar tarefa: {db_error}")
-
+         logging.error(f"Erro ao registrar tarefa {task_id} no DB: {db_error}", exc_info=True)
+         # Retorna 500 Internal Server Error se falhar ao falar com o DB
+         raise HTTPException(status_code=500, detail=f"Erro interno ao registrar tarefa.")
 
     # 2. Adicionar a execução da Crew à fila de background tasks
     background_tasks.add_task(
-        crew_service.run_niche_analysis_task,
-        task_id=str(task_id),
-        inputs=payload.model_dump() # Passa todos os inputs para a função background
+        crew_service.run_niche_analysis_task, # A função em crew_service é async
+        task_id=str(task_id), # Passa como string
+        inputs=payload.model_dump()
     )
+    logging.info(f"Task {task_id} added to background queue.")
 
     return AsyncTaskStatus(
         task_id=str(task_id),
