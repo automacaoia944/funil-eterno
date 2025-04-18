@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 # Importar routers
-from routers import ai_tasks # Incluindo o router que acabamos de criar
-from routers import projects # Adiciona import
+from .routers import ai_tasks # Incluindo o router que acabamos de criar
+from .routers import projects # Adiciona import
 
 # Carrega variáveis de ambiente do backend/.env
 from dotenv import find_dotenv, load_dotenv
