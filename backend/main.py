@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 # Importar routers
 from routers import ai_tasks # Incluindo o router que acabamos de criar
+from routers import projects # Adiciona import
 
 # Carrega variáveis de ambiente do backend/.env
 from dotenv import find_dotenv, load_dotenv
@@ -54,6 +55,7 @@ app.add_middleware(
 
 # --- Inclusão de Routers ---
 app.include_router(ai_tasks.router, prefix="/api/v1/tasks", tags=["AI Tasks"])
+app.include_router(projects.router, prefix="/api/v1/projects", tags=["Projects"])
 
 # --- Endpoint Raiz ---
 @app.get("/", tags=["Root"])
