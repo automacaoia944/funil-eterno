@@ -7,7 +7,7 @@ from datetime import datetime # Para timestamps
 
 # Importar o serviço da CrewAI e a função de execução
 try:
-    from .services import crew_service
+    from services import crew_service
 except ImportError:
     crew_service = None
     print("Warning: crew_service not found or could not be imported.")
