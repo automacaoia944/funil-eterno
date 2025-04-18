@@ -8,7 +8,7 @@ import logging # Adicionado logging
 
 # Importar cliente Supabase Admin
 try:
-    from lib.supabase_client import supabase_admin_client
+    from backend.lib.supabase_client import supabase_admin_client
     # Verifica se foi inicializado corretamente
     if not supabase_admin_client:
         logging.error("Supabase admin client FAILED to initialize in ai_tasks.py.")
@@ -20,7 +20,7 @@ except ImportError:
 
 # Importar serviço CrewAI
 try:
-    from services import crew_service
+    from backend.services import crew_service
 except ImportError:
     crew_service = None
     logging.warning("crew_service not found or could not be imported in ai_tasks.py.")
