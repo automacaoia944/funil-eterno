@@ -39,6 +39,7 @@ origins = [
     "http://localhost:5173",
     "http://localhost:3000",
     os.getenv("FRONTEND_URL"),
+    "https://funil-eterno-cfe.web.app"
 ]
 origins = [origin for origin in origins if origin]
 if not origins:
